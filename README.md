@@ -1,6 +1,6 @@
 # Kubernetes Mutating Admission Webhook for sidecar injection
 
-This tutoral shows how to build and deploy a [MutatingAdmissionWebhook](https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook-beta-in-19) that injects a nginx sidecar container into pod prior to persistence of the object.
+This shows how to build and deploy a [MutatingAdmissionWebhook](https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook-beta-in-19) that injects a specially built secret sidecar container into pod.
 
 ## Prerequisites
 
@@ -49,7 +49,6 @@ cat deployment/mutatingwebhook.yaml | \
 
 3. Deploy resources
 ```
-kubectl create -f deployment/nginxconfigmap.yaml
 kubectl create -f deployment/configmap.yaml
 kubectl create -f deployment/deployment.yaml
 kubectl create -f deployment/service.yaml
@@ -68,43 +67,47 @@ NAME                                  DESIRED   CURRENT   UP-TO-DATE   AVAILABLE
 sidecar-injector-webhook-deployment   1         1         1            1           5m
 ```
 
-2. Label the default namespace with `sidecar-injector=enabled`
+2. Label the desired namespace with `sidecar-injector=enabled`.  In the example below, we use `turbonomic` as the namespace.
 ```
-kubectl label namespace default sidecar-injector=enabled
+kubectl label namespace turbonomic sidecar-injector=enabled
 [root@mstnode ~]# kubectl get namespace -L sidecar-injector
 NAME          STATUS    AGE       SIDECAR-INJECTOR
-default       Active    18h       enabled
 kube-public   Active    18h
 kube-system   Active    18h
+turbonomic    Active    18h       enabled
 ```
 
-3. Deploy an app in Kubernetes cluster, take `sleep` app as an example
+3. To take advantage of the sidecar for pulling secrets, a specially built probe and operator are required.
+These changes will be later incorporated into the official images.
+
+3a. Use the following image for operator.
 ```
-[root@mstnode ~]# cat <<EOF | kubectl create -f -
-apiVersion: extensions/v1beta1
-kind: Deployment
-metadata:
-  name: sleep
-spec:
-  replicas: 1
-  template:
-    metadata:
-      annotations:
-        sidecar-injector-webhook.morven.me/inject: "yes"
-      labels:
-        app: sleep
-    spec:
-      containers:
-      - name: sleep
-        image: tutum/curl
-        command: ["/bin/sleep","infinity"]
-        imagePullPolicy: 
-EOF
+        image: chlam4/t8c-operator:7.21
+```
+
+3b. Edit the XL custom resource to add the desired annotation for the AWS probe which also requires 
+a specially built image at the moment but those changes will become official soon.
+```
+  aws:
+    enabled: true
+  mediation-aws:
+    annotations:
+      "sidecar-injector-webhook.turbonomic.com/inject": "yes"
+    image:
+      repository: chlam4
+      tag: 7.21.1-SNAPSHOT
+      pullPolicy: Always
 ```
 
 4. Verify sidecar container injected
 ```
-[root@mstnode ~]# kubectl get pods
-NAME                     READY     STATUS        RESTARTS   AGE
-sleep-5c55f85f5c-tn2cs   2/2       Running       0          1m
+$ kubectl -n turbonomic get pods | rg "aws-"
+mediation-aws-65988685c9-tjs5m               2/2     Running   1          3h18m
+kubectl -n turbonomic describe pod mediation-aws-65988685c9-tjs5m | egrep -i "(containers|annotations|mediation-aws|aws-secret|image):"
+Annotations:    sidecar-injector-webhook.turbonomic.com/status: injected
+Containers:
+  mediation-aws:
+    Image:          chlam4/com.vmturbo.mediation.aws.component:7.21.0-SNAPSHOT
+  init-aws-secret:
+    Image:          chlam4/chris-poc-sidecar:v3
 ```

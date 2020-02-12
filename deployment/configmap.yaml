@@ -5,15 +5,9 @@ metadata:
 data:
   sidecarconfig.yaml: |
     containers:
-      - name: sidecar-nginx
-        image: nginx:1.12.2
-        imagePullPolicy: IfNotPresent
-        ports:
-          - containerPort: 80
+      - name: init-aws-secret
+        image: chlam4/chris-poc-sidecar:v3
+        imagePullPolicy: Always
         volumeMounts:
-          - name: nginx-conf
-            mountPath: /etc/nginx
-    volumes:
-      - name: nginx-conf
-        configMap:
-          name: nginx-configmap
+          - name: secrets
+            mountPath: /data
