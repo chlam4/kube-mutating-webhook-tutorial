@@ -103,11 +103,12 @@ a specially built image at the moment but those changes will become official soo
 ```
 $ kubectl -n turbonomic get pods | rg "aws-"
 mediation-aws-65988685c9-tjs5m               2/2     Running   1          3h18m
-kubectl -n turbonomic describe pod mediation-aws-65988685c9-tjs5m | egrep -i "(containers|annotations|mediation-aws|aws-secret|image):"
+
+$ kubectl -n turbonomic describe pod mediation-aws-65988685c9-tjs5m | egrep -i "(containers|annotations|mediation-aws|aws-secret|image):"
 Annotations:    sidecar-injector-webhook.turbonomic.com/status: injected
 Containers:
   mediation-aws:
     Image:          chlam4/com.vmturbo.mediation.aws.component:7.21.0-SNAPSHOT
-  init-aws-secret:
+  aws-secret-sidecar:
     Image:          chlam4/chris-poc-sidecar:v3
 ```

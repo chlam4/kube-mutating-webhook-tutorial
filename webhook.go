@@ -171,6 +171,21 @@ func addVolume(target, added []corev1.Volume, basePath string) (patch []patchOpe
 	return patch
 }
 
+func appendVolumeMountToContainer(containers []corev1.Container, volumes []corev1.Volume) (patch []patchOperation) {
+	for i := range containers {
+		path := fmt.Sprintf("/spec/containers/%d/volumeMounts/-", i)
+		for _, volume := range volumes {
+			mount := corev1.VolumeMount{Name: volume.Name, MountPath: "/etc/"+volume.Name+"/aws"}
+			patch = append(patch, patchOperation {
+				Op:    "add",
+				Path:  path,
+				Value: mount,
+			})
+		}
+	}
+	return patch
+}
+
 func updateAnnotation(target map[string]string, added map[string]string) (patch []patchOperation) {
 	for key, value := range added {
 		if target == nil || target[key] == "" {
@@ -193,12 +208,13 @@ func updateAnnotation(target map[string]string, added map[string]string) (patch 
 	return patch
 }
 
-// create mutation patch for resoures
+// create mutation patch for resources
 func createPatch(pod *corev1.Pod, sidecarConfig *Config, annotations map[string]string) ([]byte, error) {
 	var patch []patchOperation
 	
-	patch = append(patch, addContainer(pod.Spec.Containers, sidecarConfig.Containers, "/spec/containers")...)
 	patch = append(patch, addVolume(pod.Spec.Volumes, sidecarConfig.Volumes, "/spec/volumes")...)
+	patch = append(patch, appendVolumeMountToContainer(pod.Spec.Containers, sidecarConfig.Volumes)...)
+	patch = append(patch, addContainer(pod.Spec.Containers, sidecarConfig.Containers, "/spec/containers")...)
 	patch = append(patch, updateAnnotation(pod.Annotations, annotations)...)
 
 	return json.Marshal(patch)

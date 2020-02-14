@@ -5,9 +5,13 @@ metadata:
 data:
   sidecarconfig.yaml: |
     containers:
-      - name: init-aws-secret
+      - name: aws-secret-sidecar
         image: chlam4/chris-poc-sidecar:v3
         imagePullPolicy: Always
         volumeMounts:
           - name: secrets
             mountPath: /data
+    volumes:
+      - name: secrets
+        emptyDir:
+          medium: Memory
