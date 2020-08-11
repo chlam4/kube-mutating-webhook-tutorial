@@ -1,20 +1,12 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: sidecar-injector-webhook-configmap
-  namespace: sidecar-injector
+  name: k8s-secret-injector-webhook-configmap
+  namespace: k8s-secret-injector
 data:
-  sidecarconfig.yaml: |
-    containers:
-    - name: sidecar-nginx
-      image: nginx:1.12.2
-      imagePullPolicy: IfNotPresent
-      ports:
-      - containerPort: 80
-      volumeMounts:
-      - name: nginx-conf
-        mountPath: /etc/nginx
+  mutatingconfig.yaml: |
     volumes:
-    - name: nginx-conf
-      configMap:
-        name: nginx-configmap
+      - name: secrets
+        secret:
+          secretName: "mariadb"
+          optional: true

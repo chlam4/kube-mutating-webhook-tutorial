@@ -1,25 +1,25 @@
 FROM alpine:latest
 
 # set labels for metadata
-LABEL maintainer="Morven Cao<morvencao@gmail.com>" \
-  name="sidecar-injector" \
-  description="A Kubernetes mutating webhook server that implements sidecar injection" \
-  summary="A Kubernetes mutating webhook server that implements sidecar injection"
+LABEL maintainer="Cheuk Lam<cheuk.lam@turbonomic.com>" \
+  name="k8s-secret-injector" \
+  description="A Kubernetes mutating webhook server that implements injection of kubernetes secret as volume" \
+  summary="A Kubernetes mutating webhook server that implements k8s secret injection"
 
 # set environment variables
-ENV SIDECAR_INJECTOR=/usr/local/bin/sidecar-injector \
+ENV K8S_SECRET_INJECTOR=/usr/local/bin/k8s-secret-injector \
   USER_UID=1001 \
-  USER_NAME=sidecar-injector
+  USER_NAME=k8s-secret-injector
 
-# install sidecar-injector binary
-COPY build/_output/bin/sidecar-injector ${SIDECAR_INJECTOR}
+# install k8s-secret-injector binary
+COPY build/_output/bin/k8s-secret-injector ${K8S_SECRET_INJECTOR}
 
 # copy licenses
 RUN mkdir /licenses
 COPY LICENSE /licenses
 
 # set entrypoint
-ENTRYPOINT ["/usr/local/bin/sidecar-injector"]
+ENTRYPOINT ["/usr/local/bin/k8s-secret-injector"]
 
 # switch to non-root user
 USER ${USER_UID}

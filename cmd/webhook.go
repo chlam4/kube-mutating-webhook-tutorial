@@ -34,12 +34,13 @@ var ignoredNamespaces = []string{
 }
 
 const (
-	admissionWebhookAnnotationInjectKey = "sidecar-injector-webhook.morven.me/inject"
-	admissionWebhookAnnotationStatusKey = "sidecar-injector-webhook.morven.me/status"
+	admissionWebhookAnnotationInjectKey = "k8s-secret-injector-webhook.turbonomic.com/inject"
+	admissionWebhookAnnotationSecretKey = "k8s-secret-injector-webhook.turbonomic.com/secret"
+	admissionWebhookAnnotationStatusKey = "k8s-secret-injector-webhook.turbonomic.com/status"
 )
 
 type WebhookServer struct {
-	sidecarConfig *Config
+	mutatingConfig *Config
 	server        *http.Server
 }
 
@@ -48,7 +49,7 @@ type WhSvrParameters struct {
 	port           int    // webhook server port
 	certFile       string // path to the x509 certificate for https
 	keyFile        string // path to the x509 private key matching `CertFile`
-	sidecarCfgFile string // path to sidecar injector configuration file
+	mutatingCfgFile string // path to sidecar injector configuration file
 }
 
 type Config struct {
@@ -95,9 +96,17 @@ func loadConfig(configFile string) (*Config, error) {
 	return &cfg, nil
 }
 
-// Check whether the target resoured need to be mutated
+func copyConfig(src *Config) *Config {
+	containers := make([]corev1.Container, len(src.Containers))
+	copy(containers, src.Containers)
+	volumes := make([]corev1.Volume, len(src.Volumes))
+	copy(volumes, src.Volumes)
+	return &Config{Containers: containers, Volumes: volumes}
+}
+
+// Check whether the target resource need to be mutated
 func mutationRequired(ignoredList []string, metadata *metav1.ObjectMeta) bool {
-	// skip special kubernete system namespaces
+	// skip special kubernetes system namespaces
 	for _, namespace := range ignoredList {
 		if metadata.Namespace == namespace {
 			glog.Infof("Skip mutation for %v for it's in special namespace:%v", metadata.Name, metadata.Namespace)
@@ -129,25 +138,21 @@ func mutationRequired(ignoredList []string, metadata *metav1.ObjectMeta) bool {
 	return required
 }
 
-func addContainer(target, added []corev1.Container, basePath string) (patch []patchOperation) {
-	first := len(target) == 0
-	var value interface{}
-	for _, add := range added {
-		value = add
-		path := basePath
-		if first {
-			first = false
-			value = []corev1.Container{add}
-		} else {
-			path = path + "/-"
-		}
-		patch = append(patch, patchOperation{
-			Op:    "add",
-			Path:  path,
-			Value: value,
-		})
+// customizeMutatingConfig customizes the mutating config based on the additional annotations
+func customizeMutatingConfig(mutatingConfig *Config, annotations map[string]string) *Config {
+	secretName := annotations[admissionWebhookAnnotationSecretKey]
+	if secretName == "" {
+		return mutatingConfig
 	}
-	return patch
+	// make a copy of "Config and replace the secret name in the first volume that is a secret
+	customized := copyConfig(mutatingConfig)
+	for _, vol := range customized.Volumes {
+		if secret := vol.Secret; secret != nil {
+			secret.SecretName = secretName
+			break
+		}
+	}
+	return customized
 }
 
 func addVolume(target, added []corev1.Volume, basePath string) (patch []patchOperation) {
@@ -167,6 +172,21 @@ func addVolume(target, added []corev1.Volume, basePath string) (patch []patchOpe
 			Path:  path,
 			Value: value,
 		})
+	}
+	return patch
+}
+
+func appendVolumeMountToContainer(containers []corev1.Container, volumes []corev1.Volume) (patch []patchOperation) {
+	for i := range containers {
+		path := fmt.Sprintf("/spec/containers/%d/volumeMounts/-", i)
+		for _, volume := range volumes {
+			mount := corev1.VolumeMount{Name: volume.Name, MountPath: "/vault/" + volume.Name}
+			patch = append(patch, patchOperation{
+				Op:    "add",
+				Path:  path,
+				Value: mount,
+			})
+		}
 	}
 	return patch
 }
@@ -193,12 +213,11 @@ func updateAnnotation(target map[string]string, added map[string]string) (patch 
 	return patch
 }
 
-// create mutation patch for resoures
-func createPatch(pod *corev1.Pod, sidecarConfig *Config, annotations map[string]string) ([]byte, error) {
+// create mutation patch for resources
+func createPatch(pod *corev1.Pod, mutatingConfig *Config, annotations map[string]string) ([]byte, error) {
 	var patch []patchOperation
-
-	patch = append(patch, addContainer(pod.Spec.Containers, sidecarConfig.Containers, "/spec/containers")...)
-	patch = append(patch, addVolume(pod.Spec.Volumes, sidecarConfig.Volumes, "/spec/volumes")...)
+	patch = append(patch, addVolume(pod.Spec.Volumes, mutatingConfig.Volumes, "/spec/volumes")...)
+	patch = append(patch, appendVolumeMountToContainer(pod.Spec.Containers, mutatingConfig.Volumes)...)
 	patch = append(patch, updateAnnotation(pod.Annotations, annotations)...)
 
 	return json.Marshal(patch)
@@ -228,10 +247,13 @@ func (whsvr *WebhookServer) mutate(ar *v1beta1.AdmissionReview) *v1beta1.Admissi
 		}
 	}
 
+	// customize the mutating config based on the additional annotations
+	mutatingConfig := customizeMutatingConfig(whsvr.mutatingConfig, pod.ObjectMeta.Annotations)
+
 	// Workaround: https://github.com/kubernetes/kubernetes/issues/57982
-	applyDefaultsWorkaround(whsvr.sidecarConfig.Containers, whsvr.sidecarConfig.Volumes)
+	applyDefaultsWorkaround(mutatingConfig.Containers, mutatingConfig.Volumes)
 	annotations := map[string]string{admissionWebhookAnnotationStatusKey: "injected"}
-	patchBytes, err := createPatch(&pod, whsvr.sidecarConfig, annotations)
+	patchBytes, err := createPatch(&pod, mutatingConfig, annotations)
 	if err != nil {
 		return &v1beta1.AdmissionResponse{
 			Result: &metav1.Status{

@@ -1,12 +1,12 @@
 # Image URL to use all building/pushing image targets;
 # Use your own docker registry and image name for dev/test by overridding the
 # IMAGE_REPO, IMAGE_NAME and IMAGE_TAG environment variable.
-IMAGE_REPO ?= docker.io/morvencao
-IMAGE_NAME ?= sidecar-injector
+IMAGE_REPO ?= docker.io/chlam4
+IMAGE_NAME ?= k8s-secret-injector
 
 # Github host to use for checking the source tree;
 # Override this variable ue with your own value if you're working on forked repo.
-GIT_HOST ?= github.com/morvencao
+GIT_HOST ?= github.com/chlam4
 
 PWD := $(shell pwd)
 BASE_DIR := $(shell basename $(PWD))
@@ -67,7 +67,7 @@ test:
 
 build:
 	@echo "Building the $(IMAGE_NAME) binary..."
-	@CGO_ENABLED=0 go build -o build/_output/bin/$(IMAGE_NAME) ./cmd/
+	@CGO_ENABLED=0 GOOS=linux go build -o build/_output/bin/$(IMAGE_NAME) ./cmd/
 
 ############################################################
 # image section

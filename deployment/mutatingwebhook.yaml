@@ -1,22 +1,22 @@
 apiVersion: admissionregistration.k8s.io/v1beta1
 kind: MutatingWebhookConfiguration
 metadata:
-  name: sidecar-injector-webhook-cfg
+  name: k8s-secret-injector-webhook-cfg
   labels:
-    app: sidecar-injector
+    app: k8s-secret-injector
 webhooks:
-- name: sidecar-injector.morven.me
-  clientConfig:
-    service:
-      name: sidecar-injector-webhook-svc
-      namespace: sidecar-injector
-      path: "/mutate"
-    caBundle: ${CA_BUNDLE}
-  rules:
-  - operations: ["CREATE", "UPDATE"]
-    apiGroups: [""]
-    apiVersions: ["v1"]
-    resources: ["pods"]
-  namespaceSelector:
-    matchLabels:
-      sidecar-injection: enabled
+  - name: k8s-secret-injector.turbonomic.com
+    clientConfig:
+      service:
+        name: k8s-secret-injector-webhook-svc
+        namespace: k8s-secret-injector
+        path: "/mutate"
+      caBundle: ${CA_BUNDLE}
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+    namespaceSelector:
+      matchLabels:
+        k8s-secret-injector: enabled
