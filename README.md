@@ -1,4 +1,4 @@
-# Kubernetes Mutating Webhook for Sidecar Injection
+# Kubernetes Mutating Webhook for Injecting Kubernetes Secrets as a Volume
 
 [![GoDoc](https://godoc.org/github.com/turbonomic/kube-mutating-webhook-tutorial?status.svg)](https://godoc.org/github.com/turbonomic/kube-mutating-webhook-tutorial)
 
