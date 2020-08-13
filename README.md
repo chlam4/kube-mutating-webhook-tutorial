@@ -90,14 +90,15 @@ NAME                                                     READY   STATUS    RESTA
 k8s-secret-injector-webhook-deployment-dbfd96b7f-nfjqr   1/1     Running   0          2m24s
 $ kubectl -n k8s-secret-injector get deployment
 NAME                                     READY   UP-TO-DATE   AVAILABLE   AGE
-k8s-secret-injector-webhook-deployment   1/1     1            1           51m```
+k8s-secret-injector-webhook-deployment   1/1     1            1           51m
 ```
 
 # Secret Injection Annotations
 
 This section describes how to annotate the service deployments to inject db credentials from Kubernetes secrets.
 
-1. Label the desired namespace with `k8s-secret-injector=enabled`.  In the example below, we use `turbonomic` as the namespace.
+## Label
+Label the desired namespace with `k8s-secret-injector=enabled`.  In the example below, we use `turbonomic` as the namespace.
 ```
 $ kubectl label namespace turbonomic k8s-secret-injector=enabled
 $ kubectl get namespace -L k8s-secret-injector
@@ -110,29 +111,30 @@ kube-system           Active   350d
 turbonomic            Active   350d   enabled
 ```
 
-2. Annotate the turbonomic Custom Resource (CR) for desired components to mount secrets as a volume
+## Annotate
+Annotate the turbonomic Custom Resource (CR) for desired components to mount secrets as a volume.
 
-We currently support the following two annotations:
-
-* A secret name is specified
-In the following annotation, a k8s secret name `foo` is specified.  It wil be mounted to the component `action-orchestrator`.
+We currently support the following two kinds of annotations:
+* If a component has its own credentials, then use this annotation to specify the specific secret name 
+(`foo` in the example below):
 ```
   action-orchestrator:
     annotations:
       k8s-secret-injector-webhook.turbonomic.com/inject: "true"
       k8s-secret-injector-webhook.turbonomic.com/secret: "foo"
 ```
-* A secret name is not specified
-In the following annotation, the default k8s secret named `mariadb` will be mounted to the component `action-orchestrator`. 
+* If no secret name is specified in the annotation like the following, then a default secret named `mariadb` is assumed. 
 ```
   action-orchestrator:
     annotations:
       k8s-secret-injector-webhook.turbonomic.com/inject: "true"
 ```
 
-3. Verify that the Kubernetes secret has been injected as a volume in the pod spec
-If the secret name is customized as `foo`, the pod spec will look like the following.  Otherwise, if the secret name 
-is not customized, then the default secret name of `mariadb` will be there.
+## Verify
+To verify, please check the component's pod spec for the `volumeMount` and `volumes` sections to confirm that 
+the Kubernetes secret has been injected as a volume.  In the following example, the secret named `foo` has been 
+injected and mounted.  The mountpath is `/vault/secrets`, just because Turbonomic also supports secret injection from 
+Hashicorp vault. 
 ```
 spec:
   containers:
@@ -146,6 +148,55 @@ spec:
       optional: true
       secretName: foo
 ```
+## Troubleshooting
 
-# Credential Secrets Creation
+If the pod isn't created or its spec isn't mutated properly, check the following items:
 
+1. The webhook is in running state and no error logs.
+2. The namespace in which application pod is deployed has the correct labels as configured in `mutatingwebhookconfiguration`.
+3. Check the `caBundle` is patched to `mutatingwebhookconfiguration` object by checking if `caBundle` fields is empty.
+4. Check if the application pod has annotation `k8s-secret-injector-webhook.turbonomic.com/inject":"yes"`.
+
+# Credentials Secret Creation
+
+To create the default secret (name `mariadb`) in namespace `turbonomic` with username `db_user` and password 
+`db_password`:
+```
+cat <<EOF | kubectl -n turbonomic apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mariadb
+type: Opaque
+stringData:
+  db-creds: |-
+    username: 'db_user'
+    password: 'db_password'
+```
+To create a specific secret `foo` with the same set of credentials:
+```
+cat <<EOF | kubectl -n turbonomic apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: foo
+type: Opaque
+stringData:
+  db-creds: |-
+    username: 'db_user'
+    password: 'db_password'
+```
+
+To verify that the credentials are mounted properly inside the component container:
+```
+$ kubectl -n turbonomic exec -it action-orchestrator-6869ddb975-64nc4 -- cat /vault/secrets/db-creds
+username: 'db_user'
+password: 'db_password'%
+```
+
+As a reference, here are the MySQL commands to create the above user and grant privileges on the `action` database, 
+after logging on as a user with sufficient privileges:
+```
+CREATE USER 'db_user'@'%' IDENTIFIED BY 'db_password';
+GRANT ALL PRIVILEGES ON action.* TO 'db_user'@'%';
+```
