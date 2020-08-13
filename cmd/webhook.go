@@ -96,12 +96,17 @@ func loadConfig(configFile string) (*Config, error) {
 	return &cfg, nil
 }
 
-func copyConfig(src *Config) *Config {
-	containers := make([]corev1.Container, len(src.Containers))
-	copy(containers, src.Containers)
-	volumes := make([]corev1.Volume, len(src.Volumes))
-	copy(volumes, src.Volumes)
-	return &Config{Containers: containers, Volumes: volumes}
+// copyConfig duplicates the Config via marshaling and unmarshaling of the source Config
+func copyConfig(src *Config) (*Config, error) {
+	bytes, err := yaml.Marshal(src)
+	if err != nil {
+		return nil, err
+	}
+	var copy Config
+	if err := yaml.Unmarshal(bytes, &copy); err != nil {
+		return nil, err
+	}
+	return &copy, nil
 }
 
 // Check whether the target resource need to be mutated
@@ -139,20 +144,23 @@ func mutationRequired(ignoredList []string, metadata *metav1.ObjectMeta) bool {
 }
 
 // customizeMutatingConfig customizes the mutating config based on the additional annotations
-func customizeMutatingConfig(mutatingConfig *Config, annotations map[string]string) *Config {
+func customizeMutatingConfig(mutatingConfig *Config, annotations map[string]string) (*Config, error) {
 	secretName := annotations[admissionWebhookAnnotationSecretKey]
 	if secretName == "" {
-		return mutatingConfig
+		return mutatingConfig, nil
 	}
 	// make a copy of "Config and replace the secret name in the first volume that is a secret
-	customized := copyConfig(mutatingConfig)
+	customized, err := copyConfig(mutatingConfig)
+	if err != nil {
+		return nil, err
+	}
 	for _, vol := range customized.Volumes {
 		if secret := vol.Secret; secret != nil {
 			secret.SecretName = secretName
 			break
 		}
 	}
-	return customized
+	return customized, nil
 }
 
 func addVolume(target, added []corev1.Volume, basePath string) (patch []patchOperation) {
@@ -248,7 +256,14 @@ func (whsvr *WebhookServer) mutate(ar *v1beta1.AdmissionReview) *v1beta1.Admissi
 	}
 
 	// customize the mutating config based on the additional annotations
-	mutatingConfig := customizeMutatingConfig(whsvr.mutatingConfig, pod.ObjectMeta.Annotations)
+	mutatingConfig, err := customizeMutatingConfig(whsvr.mutatingConfig, pod.ObjectMeta.Annotations)
+	if err != nil {
+		return &v1beta1.AdmissionResponse{
+			Result: &metav1.Status{
+				Message: err.Error(),
+			},
+		}
+	}
 
 	// Workaround: https://github.com/kubernetes/kubernetes/issues/57982
 	applyDefaultsWorkaround(mutatingConfig.Containers, mutatingConfig.Volumes)
