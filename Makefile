@@ -1,12 +1,12 @@
 # Image URL to use all building/pushing image targets;
 # Use your own docker registry and image name for dev/test by overridding the
 # IMAGE_REPO, IMAGE_NAME and IMAGE_TAG environment variable.
-IMAGE_REPO ?= docker.io/chlam4
+IMAGE_REPO ?= docker.io/turbonomic
 IMAGE_NAME ?= k8s-secret-injector
 
 # Github host to use for checking the source tree;
 # Override this variable ue with your own value if you're working on forked repo.
-GIT_HOST ?= github.com/chlam4
+GIT_HOST ?= github.com/turbonomic
 
 PWD := $(shell pwd)
 BASE_DIR := $(shell basename $(PWD))

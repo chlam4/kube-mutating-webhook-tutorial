@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: k8s-secret-injector
-          image: chlam4/k8s-secret-injector:v0.2
+          image: turbonomic/k8s-secret-injector:v0.2
           imagePullPolicy: Always
           args:
           - -mutatingCfgFile=/etc/webhook/config/mutatingconfig.yaml

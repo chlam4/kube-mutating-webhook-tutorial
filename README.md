@@ -1,6 +1,6 @@
 # Kubernetes Mutating Webhook for Sidecar Injection
 
-[![GoDoc](https://godoc.org/github.com/chlam4/kube-mutating-webhook-tutorial?status.svg)](https://godoc.org/github.com/chlam4/kube-mutating-webhook-tutorial)
+[![GoDoc](https://godoc.org/github.com/turbonomic/kube-mutating-webhook-tutorial?status.svg)](https://godoc.org/github.com/turbonomic/kube-mutating-webhook-tutorial)
 
 This shows how to build and deploy a [MutatingAdmissionWebhook](https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook-beta-in-19) that injects a Kubernetes secret as a volume into pods with corresponding annotations.
 
