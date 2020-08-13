@@ -4,6 +4,8 @@
 
 This shows how to build and deploy a [MutatingAdmissionWebhook](https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook-beta-in-19) that injects a Kubernetes secret as a volume into pods with corresponding annotations.
 
+# Webhook Deployment
+
 ## Prerequisites
 
 - [git](https://git-scm.com/downloads)
@@ -81,7 +83,7 @@ kubectl apply -f deployment/mutatingwebhook-ca-bundle.yaml
 
 ## Verify
 
-1. The k8s secret inject webhook should be running
+The k8s secret inject webhook should be running
 ```
 $ kubectl -n k8s-secret-injector get pods
 NAME                                                     READY   STATUS    RESTARTS   AGE
@@ -91,7 +93,11 @@ NAME                                     READY   UP-TO-DATE   AVAILABLE   AGE
 k8s-secret-injector-webhook-deployment   1/1     1            1           51m```
 ```
 
-2. Label the desired namespace with `k8s-secret-injector=enabled`.  In the example below, we use `turbonomic` as the namespace.
+# Secret Injection Annotations
+
+This section describes how to annotate the service deployments to inject db credentials from Kubernetes secrets.
+
+1. Label the desired namespace with `k8s-secret-injector=enabled`.  In the example below, we use `turbonomic` as the namespace.
 ```
 $ kubectl label namespace turbonomic k8s-secret-injector=enabled
 $ kubectl get namespace -L k8s-secret-injector
@@ -104,5 +110,42 @@ kube-system           Active   350d
 turbonomic            Active   350d   enabled
 ```
 
-3. Verify that a Kubernetes secret has been injected as a volume
-TBD
+2. Annotate the turbonomic Custom Resource (CR) for desired components to mount secrets as a volume
+
+We currently support the following two annotations:
+
+* A secret name is specified
+In the following annotation, a k8s secret name `foo` is specified.  It wil be mounted to the component `action-orchestrator`.
+```
+  action-orchestrator:
+    annotations:
+      k8s-secret-injector-webhook.turbonomic.com/inject: "true"
+      k8s-secret-injector-webhook.turbonomic.com/secret: "foo"
+```
+* A secret name is not specified
+In the following annotation, the default k8s secret named `mariadb` will be mounted to the component `action-orchestrator`. 
+```
+  action-orchestrator:
+    annotations:
+      k8s-secret-injector-webhook.turbonomic.com/inject: "true"
+```
+
+3. Verify that the Kubernetes secret has been injected as a volume in the pod spec
+If the secret name is customized as `foo`, the pod spec will look like the following.  Otherwise, if the secret name 
+is not customized, then the default secret name of `mariadb` will be there.
+```
+spec:
+  containers:
+  - volumeMounts:
+    - mountPath: /vault/secrets
+      name: db-creds
+  volumes:
+  - name: db-creds
+    secret:
+      defaultMode: 420
+      optional: true
+      secretName: foo
+```
+
+# Credential Secrets Creation
+
