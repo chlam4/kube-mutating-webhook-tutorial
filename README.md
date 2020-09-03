@@ -27,6 +27,11 @@ admissionregistration.k8s.io/v1beta1
 
 ## Build
 
+Follow the following procedure to customize and build your own image.  Or you can pull a prebuilt image from:
+```
+docker pull turbonomic/k8s-secret-injector:v0.2
+```
+
 1. Build binary
 
 ```
@@ -36,13 +41,13 @@ admissionregistration.k8s.io/v1beta1
 2. Build docker image
    
 ```
-# IMAGE_TAG=v0.2 make build-image
+# IMAGE_REPO=<your repo> IMAGE_TAG=v0.2 make build-image
 ```
 
 3. push docker image
 
 ```
-# IMAGE_TAG=v0.2 make push-image
+# IMAGE_REPO=<your repo> IMAGE_TAG=v0.2 make push-image
 ```
 
 > Note: log into the docker registry before pushing the image.
